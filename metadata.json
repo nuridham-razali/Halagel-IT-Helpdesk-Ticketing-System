@@ -1,0 +1,6 @@
+{
+  "name": "IT Helpdesk Ticketing System",
+  "description": "A modern, colorful IT Helpdesk Ticketing System with user portal and admin dashboard, powered by Google Sheets.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
