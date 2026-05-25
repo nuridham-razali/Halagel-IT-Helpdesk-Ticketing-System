@@ -1,5 +1,5 @@
 export const CONFIG = {
-  GOOGLE_SHEET_ID:        "1u24q4pCGTZuZ5xwXHKQFpxnSzAReimLWNoU7PyW4VzI",
+  GOOGLE_SHEET_ID:        "https://docs.google.com/spreadsheets/d/1u24q4pCGTZuZ5xwXHKQFpxnSzAReimLWNoU7PyW4VzI/edit?gid=17371804#gid=17371804",
   GOOGLE_API_KEY:         "AIzaSyDGxZJRYXgtxteXKB41f-YQ4FP-8Pzxwrw",
   APPS_SCRIPT_URL:        "https://script.google.com/macros/s/AKfycbxNyof6Pea76pXuUSyJSVC4jcx1pxe6laalBK9JQpZ5k9enOleTrhQMR-7YBJx2kdg7/exec",
   ADMIN_EMAIL:            "admin.it@halagel.com.my",
