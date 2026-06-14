@@ -1,4 +1,4 @@
-const url = "https://script.google.com/macros/s/AKfycbzZyv2cjuzKGsw-KKP6FC_yS2-FqtzKLgXL2tz10cZx7i9WkoX_JtjA1M8F7HzCtVPt/exec";
+const url = "https://script.google.com/macros/s/AKfycbzPriCItUIQN--lbsd7I38Gr_Xf5gXXsVsg5AXa8wUgBwOsS3MY2YkX_AJdouQXvxrx/exec";
 const data = {
   action: "append",
   sheetName: "Tickets",

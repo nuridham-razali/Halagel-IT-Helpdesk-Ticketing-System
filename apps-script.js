@@ -22,7 +22,7 @@ function doPost(e) {
     if (!ss && params.sheetId) {
       ss = SpreadsheetApp.openById(params.sheetId);
     }
-    var sheet = ss.getSheetByName(params.sheetName || 'Tickets');
+    var sheet = ss.getSheetByName(params.sheetName || 'Tickets') || ss.getSheets()[0];
     var result;
 
     if (params.action === "append") {
@@ -35,12 +35,12 @@ function doPost(e) {
     else if (params.action === "update") {
       var range = sheet.getRange(params.rowIndex, 1, 1, params.data.length);
       var oldValues = range.getValues()[0];
-      var oldStatus = oldValues[5];
+      var oldStatus = oldValues[8]; // Status is at index 8
       
       range.setValues([params.data]);
       result = { success: true, action: "update" };
       
-      var newStatus = params.data[5];
+      var newStatus = params.data[8]; // Status is at index 8
       // Send Completion Email
       if (newStatus === "Resolved" && oldStatus !== "Resolved") {
         sendResolvedTicketEmail(params.data, ss.getUrl(), params.adminEmail);
@@ -105,43 +105,80 @@ function sendNewTicketEmails(rowData, sheetUrl, forcedAdminEmail) {
     var adminEmail = forcedAdminEmail || Session.getActiveUser().getEmail(); // Use provided config email
     
     var ticketId = rowData[0];
-    var subject = rowData[1];
-    var description = rowData[2];
-    var category = rowData[3];
-    var priority = rowData[4];
-    var requesterName = rowData[6];
-    var requesterEmail = rowData[7];
-    var submittedDate = rowData[8];
-    var department = rowData[13];
+    var requesterEmail = rowData[1];
+    var requesterName = rowData[2];
+    var department = rowData[3];
+    var category = rowData[4];
+    var priority = rowData[5];
+    var description = rowData[6];
+    var subject = rowData[9];
+    var submittedDate = rowData[10];
 
     // 1. Alert Admin
-    var adminSubject = "New Helpdesk Ticket #" + ticketId + " - " + priority;
-    var adminBody = "<h3>New Support Ticket Received: #" + ticketId + "</h3>" +
-      "<p><b>From:</b> " + requesterName + " (" + requesterEmail + ")</p>" +
-      "<p><b>Department:</b> " + department + "</p>" +
-      "<p><b>Category:</b> " + category + "</p>" +
-      "<p><b>Priority:</b> " + priority + "</p>" +
-      "<p><b>Subject:</b> " + subject + "</p>" +
-      "<p><b>Description:</b> " + description + "</p>" +
-      "<p><a href='" + sheetUrl + "'>View in Spreadsheet</a></p>";
+     var adminSubject = "🎫 New Helpdesk Ticket #" + ticketId + " - " + priority + " Priority";
+    var adminBody = `
+    <div style="max-width:600px;margin:0 auto;font-family:Arial,sans-serif;color:#333;">
+      <div style="background-color:#2d7a3e;color:white;padding:20px;border-radius:10px 10px 0 0;text-align:center;">
+        <h2>🎫 New Support Ticket Received</h2>
+        <p>Ticket #${ticketId}</p>
+      </div>
+      <div style="background:#f8f9fa;padding:20px;border-radius:0 0 10px 10px;">
+        <div style="background:white;padding:15px;border-radius:8px;margin:10px 0;">
+          <p><b style="color:#2d7a3e;">From:</b> ${requesterName}</p>
+          <p><b style="color:#2d7a3e;">Email:</b> ${requesterEmail}</p>
+          <p><b style="color:#2d7a3e;">Department:</b> ${department}</p>
+          <p><b style="color:#2d7a3e;">Category:</b> ${category}</p>
+          <p><b style="color:#2d7a3e;">Priority:</b> ${priority}</p>
+          <p><b style="color:#2d7a3e;">Subject:</b> ${subject}</p>
+        </div>
+        <div style="background:white;padding:15px;border-radius:8px;margin:10px 0;">
+          <p><b style="color:#2d7a3e;">Description:</b></p>
+          <p>${description}</p>
+        </div>
+        <div style="background:white;padding:15px;border-radius:8px;margin:10px 0;">
+          <p><b style="color:#2d7a3e;">Submitted:</b> ${new Date(submittedDate).toLocaleString()}</p>
+        </div>
+        <p style="text-align:center;margin-top:20px;">
+          <a href="${sheetUrl}" 
+             style="background:#2d7a3e;color:white;padding:12px 24px;text-decoration:none;border-radius:5px;display:inline-block;">
+            View in Spreadsheet
+          </a>
+        </p>
+      </div>
+    </div>`;
 
-    if (adminEmail) {
+ if (adminEmail) {
       MailApp.sendEmail({
         to: adminEmail,
         subject: adminSubject,
-        htmlBody: adminBody
+        htmlBody: adminBody,
+        name: 'IT Helpdesk'
       });
     }
 
     // 2. Alert User
-    var userSubject = "Support Ticket Received: #" + ticketId;
-    var userBody = "<h3>Ticket Received</h3>" +
-      "<p>Hi " + requesterName + ",</p>" +
-      "<p>We've received your request and our IT team is looking into it.</p>" +
-      "<p><b>Subject:</b> " + subject + "<br>" +
-      "<b>Priority:</b> " + priority + "</p>" +
-      "<p>We will notify you once this is resolved.</p>" +
-      "<p>Thanks,<br>IT Support Team</p>";
+      var userSubject = "Support Ticket Received: #" + ticketId;
+    var userBody = `
+    <div style="max-width:600px;margin:0 auto;font-family:Arial,sans-serif;color:#333;">
+      <div style="background-color:#2d7a3e;color:white;padding:20px;border-radius:10px 10px 0 0;text-align:center;">
+        <h2>Ticket Received ✅</h2>
+        <p>Ticket #${ticketId}</p>
+      </div>
+      <div style="background:#f8f9fa;padding:20px;border-radius:0 0 10px 10px;">
+        <p>Hi ${requesterName},</p>
+        <p>Your request has been received, and I am currently checking on it..</p>
+        <div style="background:white;padding:15px;border-radius:8px;margin:10px 0;">
+          <p><b style="color:#2d7a3e;">Subject:</b> ${subject}</p>
+          <p><b style="color:#2d7a3e;">Priority:</b> ${priority}</p>
+        </div>
+        <p>I will notify you once this is resolved.</p>
+        <p>Best regards,<br><b>Idham Razali</b><br>IT/Admin Executive </p>
+      </div>
+      <div style="text-align:center;margin-top:15px;color:#999;font-size:12px;">
+        Halagel Helpdesk System - Automated Notification
+      </div>
+    </div>`;
+
 
 
     if (requesterEmail) {
@@ -164,18 +201,35 @@ function sendResolvedTicketEmail(rowData, sheetUrl, forcedAdminEmail) {
   }
   try {
     var ticketId = rowData[0];
-    var subject = rowData[1];
-    var requesterName = rowData[6];
-    var requesterEmail = rowData[7];
-    var resolutionNotes = rowData[12];
+    var requesterEmail = rowData[1];
+    var requesterName = rowData[2];
+    var subject = rowData[9];
+    var resolutionNotes = rowData[13];
     
-    var userSubject = "✅ Ticket Resolved: #" + ticketId;
-    var userBody = "<h3>Ticket Resolved: #" + ticketId + "</h3>" +
-      "<p>Hi " + requesterName + ",</p>" +
-      "<p>Your IT support ticket has been successfully resolved.</p>" +
-      "<p><b>Subject:</b> " + subject + "<br>" +
-      "<b>Resolution Notes:</b><br>" + (resolutionNotes || "Completed.") + "</p>" +
-      "<p>Thanks for your patience,<br>IT Support Team</p>";
+     var userSubject = "✅ Ticket Resolved: #" + ticketId;
+    var userBody = `
+    <div style="max-width:600px;margin:0 auto;font-family:Arial,sans-serif;color:#333;">
+      <div style="background-color:#2d7a3e;color:white;padding:20px;border-radius:10px 10px 0 0;text-align:center;">
+        <h2>Ticket Resolved ✅</h2>
+        <p>Ticket #${ticketId}</p>
+      </div>
+      <div style="background:#f8f9fa;padding:20px;border-radius:0 0 10px 10px;">
+        <p>Hi ${requesterName},</p>
+        <p>Your IT support ticket has been successfully resolved.</p>
+        <div style="background:white;padding:15px;border-radius:8px;margin:10px 0;">
+          <p><b style="color:#2d7a3e;">Subject:</b> ${subject}</p>
+          <p><b style="color:#2d7a3e;">Resolution Notes:</b></p>
+          <p>${resolutionNotes || "Completed."}</p>
+        </div>
+        
+         <p>If you have any questions or need further assistance, please don't hesitate to submit a new ticket.</p>
+        <p>Best regards,<br><b>Idham Razali</b><br>IT/Admin Executive </p>
+      </div>
+      <div style="text-align:center;margin-top:15px;color:#999;font-size:12px;">
+        Halagel Helpdesk System - Automated Notification
+      </div>
+    </div>`;
+
 
     if (requesterEmail) {
       MailApp.sendEmail({

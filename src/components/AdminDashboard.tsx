@@ -82,16 +82,19 @@ export function AdminDashboard() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
         {/* Topbar */}
-        <div className="h-16 bg-white border-b border-gray-200 flex items-center px-8 justify-between flex-shrink-0 z-10 shadow-sm w-full">
+        <div className="h-16 bg-white border-b border-gray-200 flex items-center px-8 relative flex-shrink-0 z-10 shadow-sm w-full">
            <div className="flex flex-col">
              <div className="flex items-center gap-3">
                <h1 className="text-[#1e1b4b] font-semibold text-lg leading-tight">Good {getGreeting()}, Admin!</h1>
-               <Logo size={28} className="" />
              </div>
              <span className="text-gray-400 text-xs font-medium uppercase tracking-wider">{new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'})}</span>
            </div>
            
-           <div className="flex items-center gap-6">
+           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none">
+             <Logo size={40} className="text-[#2d7a3e]" isHeadsetIconColor="#0bd179" />
+           </div>
+           
+           <div className="flex items-center gap-6 ml-auto">
              <div className="relative flex items-center">
                <svg className="absolute left-3 text-gray-400" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                <input type="text" placeholder="Search tickets..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
@@ -215,7 +218,7 @@ function DashboardTab({ tickets, loading, onSelect, onUpdate }: any) {
               <FilterPill key={f} label={f} active={filter === f} onClick={() => setFilter(f as any)} />
             ))}
           </div>
-          <button className="bg-[#7F77DD] text-white px-5 py-2 rounded-full text-sm font-semibold flex items-center gap-2 hover:opacity-90 transition-opacity">
+          <button onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: 'user' }))} className="bg-[#7F77DD] text-white px-5 py-2 rounded-full text-sm font-semibold flex items-center gap-2 hover:opacity-90 transition-opacity">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14"/><path d="M5 12h14"/></svg> Create Ticket
           </button>
         </div>
@@ -303,9 +306,12 @@ function TicketCard({ ticket, onClick, onUpdate }: { ticket: Ticket, onClick: ()
           <PriorityBadge priority={ticket.priority as TicketPriority} />
           <StatusBadge status={ticket.status as TicketStatus} />
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 font-bold text-xs">
-            {ticket.requesterName.substring(0,2)}
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 px-2 py-1">
+            <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 font-bold text-xs uppercase shadow-sm">
+              {ticket.requesterName.substring(0,2)}
+            </div>
+            <span className="text-sm font-medium text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis">{ticket.requesterName}</span>
           </div>
           <ActionButton ticket={ticket} onUpdate={onUpdate} />
         </div>

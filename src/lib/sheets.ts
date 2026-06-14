@@ -2,30 +2,40 @@ import { CONFIG } from "../config";
 import { Ticket } from "../types";
 
 // TAB 1 — "Tickets" columns (Row 1 = headers):
-// A: TicketID | B: Subject | C: Description | D: Category | E: Priority |
-// F: Status | G: RequesterName | H: RequesterEmail | I: SubmittedDate |
-// J: LastUpdated | K: AssignedTo | L: Notes | M: ResolutionNotes | N: Department
+// A: Subject | B: RequesterEmail | C: RequesterName | D: Department | E: Category |
+// F: Priority | G: Description | H: Status | I: SubmittedDate |
+// J: ResolutionNotes | K: TicketID | L: LastUpdated | M: AssignedTo | N: Notes
 
 export async function fetchTickets(): Promise<Ticket[]> {
-  // If no API key or Sheet ID, return mock data for preview/testing
-  if (!CONFIG.GOOGLE_API_KEY || CONFIG.GOOGLE_API_KEY === "YOUR_API_KEY_HERE" || !CONFIG.GOOGLE_SHEET_ID || CONFIG.GOOGLE_SHEET_ID === "YOUR_SHEET_ID_HERE") {
-    console.warn("Using mock data. Missing Google API Key or Sheet ID.");
+  if (!CONFIG.APPS_SCRIPT_URL || CONFIG.APPS_SCRIPT_URL === "YOUR_APPS_SCRIPT_WEB_APP_URL_HERE") {
+    console.warn("Using mock data. Missing APPS_SCRIPT_URL.");
     return mockTickets;
   }
-  if (CONFIG.APPS_SCRIPT_URL && !CONFIG.APPS_SCRIPT_URL.endsWith("/exec") && CONFIG.APPS_SCRIPT_URL !== "YOUR_APPS_SCRIPT_WEB_APP_URL_HERE") {
-    console.warn("Invalid APPS_SCRIPT_URL configured. It must end in /exec.");
+  if (!CONFIG.APPS_SCRIPT_URL.endsWith("/exec")) {
+    throw new Error("Invalid APPS_SCRIPT_URL configured. It must end in /exec.");
   }
 
   try {
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.GOOGLE_SHEET_ID}/values/Tickets!A:N?key=${CONFIG.GOOGLE_API_KEY}`;
-    const res = await fetch(url);
+    const res = await fetch(CONFIG.APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({
+        action: "read",
+        sheetName: "Tickets",
+        sheetId: CONFIG.GOOGLE_SHEET_ID,
+      }),
+    });
     if (!res.ok) {
-      throw new Error(`Google Sheets fetch failed: ${res.status} ${res.statusText}`);
+      throw new Error(`Apps Script fetch failed: ${res.status} ${res.statusText}`);
     }
     const data = await res.json();
     
+    if (!data.success) {
+      throw new Error(data.error || "Failed to fetch tickets via Apps Script");
+    }
+
     // Parse
-    const rows = data.values || [];
+    const rows = data.data || [];
     if (rows.length <= 1) return []; // Only headers
 
     const tickets: Ticket[] = [];
@@ -34,19 +44,19 @@ export async function fetchTickets(): Promise<Ticket[]> {
       const row = rows[i];
       tickets.push({
         id: row[0] || "",
-        subject: row[1] || "",
-        description: row[2] || "",
-        category: row[3] || "Other",
-        priority: row[4] || "Low",
-        status: row[5] || "Open",
-        requesterName: row[6] || "",
-        requesterEmail: row[7] || "",
-        submittedDate: row[8] || new Date().toISOString(),
-        lastUpdated: row[9] || new Date().toISOString(),
-        assignedTo: row[10] || "",
-        notes: row[11] || "",
-        resolutionNotes: row[12] || "",
-        department: row[13] || "Admin",
+        requesterEmail: row[1] || "",
+        requesterName: row[2] || "",
+        department: row[3] || "Admin",
+        category: row[4] || "Other",
+        priority: row[5] || "Low",
+        description: row[6] || "",
+        submittedDate: row[7] || row[10] || new Date().toISOString(),
+        status: row[8] || "Open",
+        subject: row[9] || (row[6] ? row[6].substring(0, 50) + "..." : "Support Request"),
+        lastUpdated: row[11] || new Date().toISOString(),
+        assignedTo: row[12] || "",
+        resolutionNotes: row[13] || "",
+        notes: row[14] || "", // Admin Notes
         _rowIndex: i + 1, // Google Sheet rows are 1-based
       });
     }
@@ -59,6 +69,23 @@ export async function fetchTickets(): Promise<Ticket[]> {
   }
 }
 
+export function formatToMYT(dateStr: string) {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  
+  const offsetHours = 8;
+  const localD = new Date(d.getTime() + offsetHours * 60 * 60 * 1000);
+  
+  const y = localD.getUTCFullYear();
+  const m = String(localD.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(localD.getUTCDate()).padStart(2, '0');
+  const h = String(localD.getUTCHours()).padStart(2, '0');
+  const min = String(localD.getUTCMinutes()).padStart(2, '0');
+  const s = String(localD.getUTCSeconds()).padStart(2, '0');
+  
+  return `${y}-${m}-${day}T${h}:${min}:${s}+08:00`;
+}
+
 export async function appendTicket(ticket: Ticket): Promise<void> {
   if (!CONFIG.APPS_SCRIPT_URL || CONFIG.APPS_SCRIPT_URL === "YOUR_APPS_SCRIPT_WEB_APP_URL_HERE") {
     console.warn("Simulated append: Missing Apps Script URL.");
@@ -69,21 +96,24 @@ export async function appendTicket(ticket: Ticket): Promise<void> {
     throw new Error("Invalid APPS_SCRIPT_URL. You must use the Web App URL ending in '/exec'. The URL you provided is a Library/Editor URL.");
   }
 
+  const formattedSubmitted = formatToMYT(ticket.submittedDate);
+
   const rowData = [
-    ticket.id,
-    ticket.subject,
-    ticket.description,
-    ticket.category,
-    ticket.priority,
-    ticket.status,
-    ticket.requesterName,
-    ticket.requesterEmail,
-    ticket.submittedDate,
-    ticket.lastUpdated,
-    ticket.assignedTo,
-    ticket.notes,
-    ticket.resolutionNotes,
-    ticket.department,
+    ticket.id,                      // 0: ID
+    ticket.requesterEmail,          // 1: Email
+    ticket.requesterName,           // 2: Full Name
+    ticket.department,              // 3: Department
+    ticket.category,                // 4: Request Type
+    ticket.priority,                // 5: Priority
+    ticket.description,             // 6: Description
+    formattedSubmitted,             // 7: Submitted Date & Time (formatted)
+    ticket.status,                  // 8: Status
+    ticket.subject,                 // 9: Subject
+    "",                             // 10: Empty (formerly ISO format column)
+    ticket.lastUpdated,             // 11: Last Updated
+    ticket.assignedTo,              // 12: Assigned To
+    ticket.resolutionNotes,         // 13: Resolution Notes
+    ticket.notes,                   // 14: Admin Notes
   ];
 
   try {
@@ -93,6 +123,7 @@ export async function appendTicket(ticket: Ticket): Promise<void> {
       body: JSON.stringify({
         action: "append",
         sheetName: "Tickets",
+        sheetId: CONFIG.GOOGLE_SHEET_ID,
         data: rowData,
         adminEmail: CONFIG.ADMIN_EMAIL
       })
@@ -115,21 +146,24 @@ export async function updateTicket(ticket: Ticket): Promise<void> {
     throw new Error("Invalid APPS_SCRIPT_URL. You must use the Web App URL ending in '/exec'. The URL you provided is a Library/Editor URL.");
   }
 
+  const formattedSubmitted = formatToMYT(ticket.submittedDate);
+
   const rowData = [
-    ticket.id,
-    ticket.subject,
-    ticket.description,
-    ticket.category,
-    ticket.priority,
-    ticket.status,
-    ticket.requesterName,
-    ticket.requesterEmail,
-    ticket.submittedDate,
-    ticket.lastUpdated,
-    ticket.assignedTo,
-    ticket.notes,
-    ticket.resolutionNotes,
-    ticket.department,
+    ticket.id,                      // 0: ID
+    ticket.requesterEmail,          // 1: Email
+    ticket.requesterName,           // 2: Full Name
+    ticket.department,              // 3: Department
+    ticket.category,                // 4: Request Type
+    ticket.priority,                // 5: Priority
+    ticket.description,             // 6: Description
+    formattedSubmitted,             // 7: Submitted Date & Time (formatted)
+    ticket.status,                  // 8: Status
+    ticket.subject,                 // 9: Subject
+    "",                             // 10: Empty (formerly ISO format column)
+    ticket.lastUpdated,             // 11: Last Updated
+    ticket.assignedTo,              // 12: Assigned To
+    ticket.resolutionNotes,         // 13: Resolution Notes
+    ticket.notes,                   // 14: Admin Notes
   ];
 
   try {
@@ -139,6 +173,7 @@ export async function updateTicket(ticket: Ticket): Promise<void> {
       body: JSON.stringify({
         action: "update",
         sheetName: "Tickets",
+        sheetId: CONFIG.GOOGLE_SHEET_ID,
         data: rowData,
         rowIndex: ticket._rowIndex,
         adminEmail: CONFIG.ADMIN_EMAIL
