@@ -28,8 +28,9 @@ export function AdminDashboard() {
     try {
       const data = await fetchTickets();
       setTickets(data);
-    } catch(err) {
-      showToast("Error loading tickets", "error");
+    } catch(err: any) {
+      console.error(err);
+      showToast(err.message || "Error loading tickets", "error");
     } finally {
       setLoading(false);
     }

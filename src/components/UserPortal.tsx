@@ -187,8 +187,8 @@ function SubmitTicketTab() {
       await appendTicket(newTicket);
       setSubmittedTicket(newTicket);
       showToast("Ticket submitted successfully", 'success');
-    } catch (err) {
-      showToast("Failed to submit ticket. Check config.", "error");
+    } catch (err: any) {
+      showToast(err.message || "Failed to submit ticket. Check config.", "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -335,8 +335,8 @@ function CheckStatusTab() {
       if(filtered.length === 0) {
         showToast("No tickets found for that ID or Email.", "info");
       }
-    } catch(err) {
-      showToast("Error searching. Try again later.", "error");
+    } catch(err: any) {
+      showToast(err.message || "Error searching. Try again later.", "error");
     } finally {
       setIsLoading(false);
     }
@@ -423,6 +423,7 @@ export function StatusBadge({ status, isDark = false }: { status: TicketStatus, 
   if (status === "Open") colors = isDark ? "bg-blue-500/20 text-blue-300 border-blue-500/30" : "bg-[#dbeafe] text-[#1e40af]";
   else if(status === "In Progress") colors = isDark ? "bg-amber-500/20 text-amber-300 border-amber-500/30" : "bg-[#fef3c7] text-[#92400e]";
   else if(status === "Resolved") colors = isDark ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30" : "bg-[#d1fae5] text-[#065f46]";
+  else if(status === "Closed") colors = isDark ? "bg-gray-500/20 text-gray-400 border-gray-500/30" : "bg-gray-200 text-gray-700";
   
   return <span className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full ${isDark ? 'border' : ''} whitespace-nowrap ${colors}`}>{status}</span>;
 }

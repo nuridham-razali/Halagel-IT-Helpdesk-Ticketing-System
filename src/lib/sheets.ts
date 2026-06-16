@@ -16,15 +16,22 @@ export async function fetchTickets(): Promise<Ticket[]> {
   }
 
   try {
-    const res = await fetch(CONFIG.APPS_SCRIPT_URL, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({
-        action: "read",
-        sheetName: "Tickets",
-        sheetId: CONFIG.GOOGLE_SHEET_ID,
-      }),
-    });
+    let res;
+    try {
+      res = await fetch(CONFIG.APPS_SCRIPT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({
+          action: "read",
+          sheetName: "Tickets",
+          sheetId: CONFIG.GOOGLE_SHEET_ID,
+        }),
+      });
+    } catch (networkError) {
+      console.error("Network or CORS error:", networkError);
+      throw new Error("Failed to fetch. Please verify that your Apps Script Web App is deployed with 'Execute as: Me' and 'Who has access: Anyone'.");
+    }
+
     if (!res.ok) {
       throw new Error(`Apps Script fetch failed: ${res.status} ${res.statusText}`);
     }
@@ -42,6 +49,30 @@ export async function fetchTickets(): Promise<Ticket[]> {
     // Start from row 1 (exclude header 0). Row in Google Sheet is 1-based, so index 1 is row 2
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
+      let subDate = row[7] || row[10] || new Date().toISOString();
+      
+      // Fix potential legacy DD/MM/YYYY format parsing issue in JS
+      if (typeof subDate === 'string' && subDate.match(/^\d{1,2}\/\d{1,2}\/\d{4}/)) {
+        const parts = subDate.split(/[^\d]/); // e.g. ["31", "12", "2026", ...]
+        if (parts.length >= 3) {
+          const day = parseInt(parts[0], 10);
+          const month = parseInt(parts[1], 10) - 1;
+          const year = parseInt(parts[2], 10);
+          const hour = parts.length > 3 ? parseInt(parts[3], 10) : 0;
+          const min = parts.length > 4 ? parseInt(parts[4], 10) : 0;
+          const sec = parts.length > 5 ? parseInt(parts[5], 10) : 0;
+          const d = new Date(year, month, day, hour, min, sec);
+          if (!isNaN(d.getTime())) {
+            subDate = d.toISOString();
+          }
+        }
+      } else if (typeof subDate === 'string' && !isNaN(Date.parse(subDate))) {
+        subDate = new Date(subDate).toISOString();
+      } else {
+        // If it's completely unparseable string, use current date
+        subDate = new Date().toISOString();
+      }
+
       tickets.push({
         id: row[0] || "",
         requesterEmail: row[1] || "",
@@ -50,7 +81,7 @@ export async function fetchTickets(): Promise<Ticket[]> {
         category: row[4] || "Other",
         priority: row[5] || "Low",
         description: row[6] || "",
-        submittedDate: row[7] || row[10] || new Date().toISOString(),
+        submittedDate: subDate,
         status: row[8] || "Open",
         subject: row[9] || (row[6] ? row[6].substring(0, 50) + "..." : "Support Request"),
         lastUpdated: row[11] || new Date().toISOString(),
@@ -109,7 +140,7 @@ export async function appendTicket(ticket: Ticket): Promise<void> {
     formattedSubmitted,             // 7: Submitted Date & Time (formatted)
     ticket.status,                  // 8: Status
     ticket.subject,                 // 9: Subject
-    "",                             // 10: Empty (formerly ISO format column)
+    formattedSubmitted,             // 10: Submitted Date
     ticket.lastUpdated,             // 11: Last Updated
     ticket.assignedTo,              // 12: Assigned To
     ticket.resolutionNotes,         // 13: Resolution Notes
@@ -117,17 +148,23 @@ export async function appendTicket(ticket: Ticket): Promise<void> {
   ];
 
   try {
-    const res = await fetch(CONFIG.APPS_SCRIPT_URL, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({
-        action: "append",
-        sheetName: "Tickets",
-        sheetId: CONFIG.GOOGLE_SHEET_ID,
-        data: rowData,
-        adminEmail: CONFIG.ADMIN_EMAIL
-      })
-    });
+    let res;
+    try {
+      res = await fetch(CONFIG.APPS_SCRIPT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({
+          action: "append",
+          sheetName: "Tickets",
+          sheetId: CONFIG.GOOGLE_SHEET_ID,
+          data: rowData,
+          adminEmail: CONFIG.ADMIN_EMAIL
+        })
+      });
+    } catch (networkError) {
+      console.error("Network or CORS error:", networkError);
+      throw new Error("Failed to fetch. Please verify that your Apps Script Web App is deployed with 'Execute as: Me' and 'Who has access: Anyone'.");
+    }
     if (!res.ok) throw new Error("Network response was not ok");
   } catch (err) {
     console.error("Append error:", err);
@@ -159,7 +196,7 @@ export async function updateTicket(ticket: Ticket): Promise<void> {
     formattedSubmitted,             // 7: Submitted Date & Time (formatted)
     ticket.status,                  // 8: Status
     ticket.subject,                 // 9: Subject
-    "",                             // 10: Empty (formerly ISO format column)
+    formattedSubmitted,             // 10: Submitted Date
     ticket.lastUpdated,             // 11: Last Updated
     ticket.assignedTo,              // 12: Assigned To
     ticket.resolutionNotes,         // 13: Resolution Notes
@@ -167,18 +204,24 @@ export async function updateTicket(ticket: Ticket): Promise<void> {
   ];
 
   try {
-    const res = await fetch(CONFIG.APPS_SCRIPT_URL, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({
-        action: "update",
-        sheetName: "Tickets",
-        sheetId: CONFIG.GOOGLE_SHEET_ID,
-        data: rowData,
-        rowIndex: ticket._rowIndex,
-        adminEmail: CONFIG.ADMIN_EMAIL
-      })
-    });
+    let res;
+    try {
+      res = await fetch(CONFIG.APPS_SCRIPT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({
+          action: "update",
+          sheetName: "Tickets",
+          sheetId: CONFIG.GOOGLE_SHEET_ID,
+          data: rowData,
+          rowIndex: ticket._rowIndex,
+          adminEmail: CONFIG.ADMIN_EMAIL
+        })
+      });
+    } catch (networkError) {
+      console.error("Network or CORS error:", networkError);
+      throw new Error("Failed to fetch. Please verify that your Apps Script Web App is deployed with 'Execute as: Me' and 'Who has access: Anyone'.");
+    }
     if (!res.ok) throw new Error("Network response was not ok");
   } catch (err) {
     console.error("Update error:", err);

@@ -128,6 +128,12 @@ export function TicketModal({ ticket, onClose, onUpdate }: { ticket: Ticket, onC
               Mark complete
             </button>
           )}
+
+          {ticket.status === 'Resolved' && (
+            <button onClick={() => handleSave('Closed')} disabled={isSaving} className="px-5 py-2.5 rounded-full text-sm font-semibold bg-gray-600 hover:bg-gray-800 text-white transition-all shadow-sm">
+              Close Ticket
+            </button>
+          )}
         </div>
       </motion.div>
     </div>
