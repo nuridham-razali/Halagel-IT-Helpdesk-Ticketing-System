@@ -49,29 +49,12 @@ export async function fetchTickets(): Promise<Ticket[]> {
     // Start from row 1 (exclude header 0). Row in Google Sheet is 1-based, so index 1 is row 2
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
-      let subDate = row[7] || row[10] || new Date().toISOString();
+      const parsedSub = parseSheetDate(row[7] || row[10]);
+      const subDate = parsedSub || new Date().toISOString();
       
-      // Fix potential legacy DD/MM/YYYY format parsing issue in JS
-      if (typeof subDate === 'string' && subDate.match(/^\d{1,2}\/\d{1,2}\/\d{4}/)) {
-        const parts = subDate.split(/[^\d]/); // e.g. ["31", "12", "2026", ...]
-        if (parts.length >= 3) {
-          const day = parseInt(parts[0], 10);
-          const month = parseInt(parts[1], 10) - 1;
-          const year = parseInt(parts[2], 10);
-          const hour = parts.length > 3 ? parseInt(parts[3], 10) : 0;
-          const min = parts.length > 4 ? parseInt(parts[4], 10) : 0;
-          const sec = parts.length > 5 ? parseInt(parts[5], 10) : 0;
-          const d = new Date(year, month, day, hour, min, sec);
-          if (!isNaN(d.getTime())) {
-            subDate = d.toISOString();
-          }
-        }
-      } else if (typeof subDate === 'string' && !isNaN(Date.parse(subDate))) {
-        subDate = new Date(subDate).toISOString();
-      } else {
-        // If it's completely unparseable string, use current date
-        subDate = new Date().toISOString();
-      }
+      const parsedUpdated = parseSheetDate(row[11]);
+      // Use submitted date as fallback if lastUpdated column is empty or unset, NOT today's date!
+      const lastUpdated = parsedUpdated || subDate;
 
       tickets.push({
         id: row[0] || "",
@@ -84,7 +67,7 @@ export async function fetchTickets(): Promise<Ticket[]> {
         submittedDate: subDate,
         status: row[8] || "Open",
         subject: row[9] || (row[6] ? row[6].substring(0, 50) + "..." : "Support Request"),
-        lastUpdated: row[11] || new Date().toISOString(),
+        lastUpdated: lastUpdated,
         assignedTo: row[12] || "",
         resolutionNotes: row[13] || "",
         notes: row[14] || "", // Admin Notes
@@ -98,6 +81,93 @@ export async function fetchTickets(): Promise<Ticket[]> {
     console.error("Error fetching tickets:", err);
     throw err;
   }
+}
+
+export function parseSheetDate(dateVal: any): string {
+  if (!dateVal) return "";
+  const str = String(dateVal).trim();
+  if (!str) return "";
+
+  // Fix potential DD/MM/YYYY or DD-MM-YYYY format
+  if (/^\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}/.test(str)) {
+    const parts = str.split(/[^\d]/).filter(Boolean);
+    if (parts.length >= 3) {
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      let year = parseInt(parts[2], 10);
+      if (year < 100) year += 2000;
+      const hour = parts.length > 3 ? parseInt(parts[3], 10) : 0;
+      const min = parts.length > 4 ? parseInt(parts[4], 10) : 0;
+      const sec = parts.length > 5 ? parseInt(parts[5], 10) : 0;
+      const d = new Date(year, month, day, hour, min, sec);
+      if (!isNaN(d.getTime())) {
+        return d.toISOString();
+      }
+    }
+  }
+
+  // YYYY-MM-DD or YYYY/MM/DD
+  if (/^\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}/.test(str)) {
+    const parts = str.split(/[^\d]/).filter(Boolean);
+    if (parts.length >= 3) {
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+      const hour = parts.length > 3 ? parseInt(parts[3], 10) : 0;
+      const min = parts.length > 4 ? parseInt(parts[4], 10) : 0;
+      const sec = parts.length > 5 ? parseInt(parts[5], 10) : 0;
+      const d = new Date(year, month, day, hour, min, sec);
+      if (!isNaN(d.getTime())) {
+        return d.toISOString();
+      }
+    }
+  }
+
+  const parsed = Date.parse(str);
+  if (!isNaN(parsed)) {
+    return new Date(parsed).toISOString();
+  }
+
+  return "";
+}
+
+export function isDateToday(dateStrOrVal: any): boolean {
+  if (!dateStrOrVal) return false;
+  const now = new Date();
+  
+  const localYear = now.getFullYear();
+  const localMonth = now.getMonth();
+  const localDate = now.getDate();
+
+  const iso = parseSheetDate(dateStrOrVal);
+  let d: Date | null = null;
+  if (iso) {
+    d = new Date(iso);
+  } else if (dateStrOrVal instanceof Date && !isNaN(dateStrOrVal.getTime())) {
+    d = dateStrOrVal;
+  }
+
+  if (d && !isNaN(d.getTime())) {
+    if (d.getFullYear() === localYear && d.getMonth() === localMonth && d.getDate() === localDate) {
+      return true;
+    }
+    // Also check UTC day in case date is stored as UTC
+    if (d.getUTCFullYear() === now.getUTCFullYear() && d.getUTCMonth() === now.getUTCMonth() && d.getUTCDate() === now.getUTCDate()) {
+      return true;
+    }
+  }
+
+  // Quick prefix matching (e.g. YYYY-MM-DD or DD/MM/YYYY)
+  const raw = String(dateStrOrVal).trim();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const yyyymmdd = `${localYear}-${pad(localMonth + 1)}-${pad(localDate)}`;
+  const ddmmyyyy = `${pad(localDate)}/${pad(localMonth + 1)}/${localYear}`;
+  const dmmyyyy = `${localDate}/${pad(localMonth + 1)}/${localYear}`;
+  if (raw.startsWith(yyyymmdd) || raw.startsWith(ddmmyyyy) || raw.startsWith(dmmyyyy)) {
+    return true;
+  }
+
+  return false;
 }
 
 export function formatToMYT(dateStr: string) {
@@ -128,6 +198,7 @@ export async function appendTicket(ticket: Ticket): Promise<void> {
   }
 
   const formattedSubmitted = formatToMYT(ticket.submittedDate);
+  const formattedUpdated = formatToMYT(ticket.lastUpdated || ticket.submittedDate);
 
   const rowData = [
     ticket.id,                      // 0: ID
@@ -141,7 +212,7 @@ export async function appendTicket(ticket: Ticket): Promise<void> {
     ticket.status,                  // 8: Status
     ticket.subject,                 // 9: Subject
     formattedSubmitted,             // 10: Submitted Date
-    ticket.lastUpdated,             // 11: Last Updated
+    formattedUpdated,               // 11: Last Updated
     ticket.assignedTo,              // 12: Assigned To
     ticket.resolutionNotes,         // 13: Resolution Notes
     ticket.notes,                   // 14: Admin Notes
@@ -184,6 +255,7 @@ export async function updateTicket(ticket: Ticket): Promise<void> {
   }
 
   const formattedSubmitted = formatToMYT(ticket.submittedDate);
+  const formattedUpdated = formatToMYT(ticket.lastUpdated || ticket.submittedDate);
 
   const rowData = [
     ticket.id,                      // 0: ID
@@ -197,7 +269,7 @@ export async function updateTicket(ticket: Ticket): Promise<void> {
     ticket.status,                  // 8: Status
     ticket.subject,                 // 9: Subject
     formattedSubmitted,             // 10: Submitted Date
-    ticket.lastUpdated,             // 11: Last Updated
+    formattedUpdated,               // 11: Last Updated
     ticket.assignedTo,              // 12: Assigned To
     ticket.resolutionNotes,         // 13: Resolution Notes
     ticket.notes,                   // 14: Admin Notes
@@ -275,7 +347,7 @@ const mockTickets: Ticket[] = [
     requesterName: "Mike Johnson",
     requesterEmail: "mike.j@example.com",
     submittedDate: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString(),
-    lastUpdated: new Date(Date.now() - 1000 * 60 * 60 * 12).toISOString(),
+    lastUpdated: new Date(Date.now() - 1000 * 60 * 60 * 70).toISOString(),
     assignedTo: "Admin",
     notes: "Replaced the access point.",
     resolutionNotes: "Access point AP-05 was faulty. Replaced with new unit.",
