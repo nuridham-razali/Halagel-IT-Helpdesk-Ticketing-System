@@ -3,7 +3,7 @@ import { IconLayoutDashboard, IconTicket, IconDeviceDesktopAnalytics, IconSettin
 import { Logo } from './Logo';
 import { CONFIG } from '../config';
 import { Ticket, TicketCategory, TicketPriority, TicketStatus } from '../types';
-import { fetchTickets, updateTicket } from '../lib/sheets';
+import { fetchTickets, updateTicket, isDateToday } from '../lib/sheets';
 import { useToast } from './ToastProvider';
 import { PriorityBadge, StatusBadge } from './UserPortal';
 import { motion, AnimatePresence } from 'motion/react';
@@ -193,22 +193,69 @@ function getGreeting() {
 }
 
 function DashboardTab({ tickets, loading, onSelect, onUpdate }: any) {
-  const [filter, setFilter] = useState<'All' | TicketStatus>('All');
+  const [filter, setFilter] = useState<'All' | TicketStatus | 'Resolved Today'>('All');
 
-  const openTickets = tickets.filter((t:Ticket) => t.status === 'Open').length;
-  const inProgressTickets = tickets.filter((t:Ticket) => t.status === 'In Progress').length;
-  const resolvedTickets = tickets.filter((t:Ticket) => t.status === 'Resolved').length;
+  const openTickets = tickets.filter((t: Ticket) => t.status?.trim().toLowerCase() === 'open').length;
+  const inProgressTickets = tickets.filter((t: Ticket) => t.status?.trim().toLowerCase() === 'in progress').length;
+  
+  // Total resolved/closed tickets of all time
+  const allResolvedTickets = tickets.filter((t: Ticket) => {
+    const s = t.status?.trim().toLowerCase();
+    return s === 'resolved' || s === 'closed';
+  });
 
-  const displayTickets = tickets.filter((t:Ticket) => filter === 'All' ? true : t.status === filter);
+  // Tickets whose resolution or latest update happened TODAY
+  const resolvedTodayTickets = allResolvedTickets.filter((t: Ticket) => {
+    return isDateToday(t.lastUpdated) || isDateToday(t.submittedDate);
+  }).length;
+
+  const displayTickets = tickets.filter((t: Ticket) => {
+    if (filter === 'All') return true;
+    if (filter === 'Resolved Today') {
+      const s = t.status?.trim().toLowerCase();
+      const isResolved = s === 'resolved' || s === 'closed';
+      return isResolved && (isDateToday(t.lastUpdated) || isDateToday(t.submittedDate));
+    }
+    return t.status?.trim().toLowerCase() === filter.toLowerCase();
+  });
 
   return (
     <div className="flex flex-col h-full animate-fade-in text-[#1e1b4b] overflow-hidden">
       {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <StatCard title="Open Tickets" value={openTickets} bg="bg-[#ede9fe]" text="text-[#3730a3]" />
-        <StatCard title="In Progress" value={inProgressTickets} bg="bg-[#fef9c3]" text="text-[#92400e]" />
-        <StatCard title="Resolved Today" value={resolvedTickets} bg="bg-[#d1fae5]" text="text-[#047857]" />
-        <StatCard title="Total All Time" value={tickets.length} bg="bg-[#fce7f3]" text="text-[#9d174d]" />
+        <StatCard 
+          title="Open Tickets" 
+          value={openTickets} 
+          bg="bg-[#ede9fe]" 
+          text="text-[#3730a3]" 
+          active={filter === 'Open'}
+          onClick={() => setFilter(filter === 'Open' ? 'All' : 'Open')}
+        />
+        <StatCard 
+          title="In Progress" 
+          value={inProgressTickets} 
+          bg="bg-[#fef9c3]" 
+          text="text-[#92400e]" 
+          active={filter === 'In Progress'}
+          onClick={() => setFilter(filter === 'In Progress' ? 'All' : 'In Progress')}
+        />
+        <StatCard 
+          title="Resolved Today" 
+          value={resolvedTodayTickets} 
+          subtitle={`${allResolvedTickets.length} all-time`}
+          bg="bg-[#d1fae5]" 
+          text="text-[#047857]" 
+          active={filter === 'Resolved Today'}
+          onClick={() => setFilter(filter === 'Resolved Today' ? 'All' : 'Resolved Today')}
+        />
+        <StatCard 
+          title="Total All Time" 
+          value={tickets.length} 
+          bg="bg-[#fce7f3]" 
+          text="text-[#9d174d]" 
+          active={filter === 'All'}
+          onClick={() => setFilter('All')}
+        />
       </div>
 
       <div className="flex flex-col gap-4 flex-1 overflow-hidden">
@@ -244,15 +291,21 @@ function DashboardTab({ tickets, loading, onSelect, onUpdate }: any) {
   );
 }
 
-function StatCard({ title, value, bg, text }: any) {
+function StatCard({ title, value, subtitle, bg, text, active, onClick }: any) {
   return (
-    <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
-      <div className={`w-12 h-12 ${bg} rounded-xl flex items-center justify-center ${text}`}>
+    <div 
+      onClick={onClick}
+      className={`bg-white p-5 rounded-2xl border transition-all select-none ${active ? 'ring-2 ring-[#7F77DD] border-[#7F77DD] shadow-md' : 'border-gray-100 shadow-sm'} ${onClick ? 'cursor-pointer hover:border-gray-300' : ''} flex items-center gap-4`}
+    >
+      <div className={`w-12 h-12 ${bg} rounded-xl flex items-center justify-center ${text} flex-shrink-0`}>
          <IconTicket size={24} stroke={2} />
       </div>
-      <div>
-        <span className="block text-2xl font-bold text-[#1e1b4b]">{value}</span>
-        <span className="text-xs text-gray-500 font-medium">{title}</span>
+      <div className="flex-1 min-w-0">
+        <span className="block text-2xl font-bold text-[#1e1b4b] leading-tight">{value}</span>
+        <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+          <span className="text-xs text-gray-500 font-medium">{title}</span>
+          {subtitle && <span className="text-[11px] text-gray-400 font-normal">({subtitle})</span>}
+        </div>
       </div>
     </div>
   );
